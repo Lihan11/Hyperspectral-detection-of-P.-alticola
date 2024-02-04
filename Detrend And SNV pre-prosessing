@@ -1,0 +1,87 @@
+import pandas as pd
+import numpy as np
+from scipy.signal import savgol_filter
+from sklearn.preprocessing import scale
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.linear_model import LinearRegression
+
+
+def apply_detrending(data):
+
+    # this code splits the data in x and y variables
+    list = data.columns.values
+    list = np.delete(list, 0)
+    print("this is x", list)
+
+    x1 = data.loc[:, list].values
+    x1 = np.array(x1)
+    print("This is X1", x1)
+
+    y = data.loc[:, "Status"].values
+
+    print("This is y", y)
+
+    # Exclude the first column (wavelengths) from detrending
+    reflectance_data = x1
+
+    # Step 1: Apply SNV transformation to normalize each row
+    #mean_row = np.mean(reflectance_data, axis=1).reshape(-1, 1)
+    #std_row = np.std(reflectance_data, axis=1).reshape(-1, 1)
+    #data_normalized = (reflectance_data - mean_row) / std_row
+    #mean_row = np.mean(reflectance_data, axis=1, keepdims=True)
+    #std_row = np.std(reflectance_data, axis=1, keepdims=True)
+    #data_normalized = (reflectance_data - mean_row) / std_row
+    data_normalized = scale(reflectance_data, axis=1)
+
+    # Function to apply SNV normalization
+    def apply_snv_normalization(data):
+        centered_data = scale(data, axis=0, with_mean=True, with_std=False)
+        snv_normalized_data = scale(centered_data, axis=0, with_mean=False, with_std=True)
+        return snv_normalized_data
+
+    # Apply SNV normalization to your spectral data
+    snv_normalized_data = apply_snv_normalization(x1)
+
+    # Print the first few rows of the SNV normalized data
+    print(snv_normalized_data[:5, :])
+
+    SNV_file_path = "23 Nov SNV.xlsx"
+    data_frame = pd.DataFrame(snv_normalized_data)
+    data_frame.to_excel(SNV_file_path, index=False, header=False, engine="openpyxl")
+
+    # Step 2: Fit a second-order linear model and calculate residuals
+    """x = np.arange(data_normalized.shape[1])
+    fitted_residuals = np.zeros_like(data_normalized)
+    for i in range(data_normalized.shape[0]):
+        coeff = np.polyfit(x, data_normalized[i], 2)
+        fitted_curve = np.polyval(coeff, x)
+        fitted_residuals[i] = data_normalized[i] - fitted_curve"""
+    x = np.arange(data_normalized.shape[1])
+    fitted_residuals = np.zeros_like(data_normalized)
+    for i in range(data_normalized.shape[0]):
+        xpoly = PolynomialFeatures(degree=2).fit_transform(x.reshape(-1, 1))
+        model = LinearRegression().fit(xpoly, data_normalized[i])
+        fitted_curve = model.predict(xpoly)
+        fitted_residuals[i] = data_normalized[i] - fitted_curve
+
+    print(fitted_residuals)
+
+    # Reassemble the detrended data with the wavelength column
+    detrended_data = np.hstack((y.reshape(-1, 1), fitted_residuals))
+
+    return detrended_data
+
+# Step 1: Read the hyperspectral data into a DataFrame
+file_path =   # Replace with the path to your Excel file
+sheet_name = "Test"  # Replace with the name of the sheet containing the data
+df = pd.read_excel(file_path, sheet_name=sheet_name, engine="openpyxl")
+
+# Step 2: Apply the detrending method
+detrended_data = apply_detrending(df)
+
+# Step 3: Convert the detrended data back to a DataFrame
+detrended_df = pd.DataFrame(detrended_data)
+
+# Step 4: Save the detrended data to a new Excel file (optional)
+#detrended_file_path = "Raw Final Detrend Tanay.xlsx"
+#detrended_df.to_excel(detrended_file_path, index=False, header=False, engine="openpyxl")
