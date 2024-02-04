@@ -1,0 +1,193 @@
+import numpy as np
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.model_selection import train_test_split
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import train_test_split
+import torch
+from sklearn.metrics import precision_score
+import torch.nn as nn
+from sklearn.metrics import accuracy_score
+import torch.nn.functional as F
+import random
+import torch_directml
+from scipy import sparse
+import san
+from multiprocessing import process, freeze_support
+import simple_colors
+
+
+
+
+# Define your dataset with features (X) and corresponding labels (y)
+
+data = pd.read_excel \
+    (#Your file here)
+
+list1 = data.columns.values
+list1 = np.delete(list1, 0)
+print(list1)
+
+x = data.loc[:, list1].values
+X = np.array(x)
+print(X)
+
+y = data.loc[:, "target"].values
+
+print(y)
+
+#data = data.values
+# Define hyperparameters for the genetic algorithm
+population_size = 10
+num_generations = 10
+mutation_rate = 0.1
+
+
+def main():
+
+    def fitness_function(selected_features):
+        # Extract the selected features using the solution vector
+        selected_indices = [i for i, feature in enumerate(selected_features) if feature == 1]
+        print(data.size)
+        print("selected features", selected_indices)
+        data_subset = X[:, selected_indices]
+        print(data_subset.size)
+        print(simple_colors.blue("This is the selected data"), data_subset)
+        #print(selected_features)
+        #what = data[:, -1]
+        what = y
+
+        train_data, test_data, train_labels, test_labels = train_test_split(data_subset, what, stratify=what, test_size=0.2,
+                                                                            random_state=42)
+
+
+
+
+        # Perform classification (you can use any classifier of your choice)
+        # Replace the classifier with your own preferred classifier.
+
+        mod = san.SAN(num_epochs=2, num_heads=4, batch_size=8, dropout=0.2, hidden_layer_size=32, stopping_crit=10,
+                      learning_rate=0.01)
+
+
+        train_data = sparse.csr_matrix(train_data)
+        test_data = sparse.csr_matrix(test_data)
+
+        mod.fit(train_data, train_labels)
+        predictions = mod.predict(test_data)
+        accuracy = accuracy_score(predictions, test_labels)
+        print("accuracy of retrained model", accuracy)
+
+
+
+        return accuracy
+
+
+    def initialize_population(num_features):
+        # Initialize a random binary population for feature selection
+        population = []
+        for _ in range(population_size):
+            individual = [random.randint(0, 1) for _ in range(num_features)]
+            population.append(individual)
+        print(len(population))
+        return population
+
+
+    def select_parents(population, fitness_scores):
+        # Select parents for crossover based on their fitness scores
+        # Higher fitness scores have a higher chance of being selected
+        total_fitness = sum(fitness_scores)
+        probabilities = [score / total_fitness for score in fitness_scores]
+        print(len(population))
+        print(population_size)
+        print(probabilities)
+        parents_indices = np.random.choice(len(population), size=population_size // 2, p=probabilities, replace=True)
+        parents = [population[idx] for idx in parents_indices]
+        return parents
+
+
+    def crossover(parents):
+        # Perform crossover to create new children
+        children = []
+        for i in range(0, len(parents) -1, 2):
+            parent1, parent2 = parents[i], parents[i + 1]
+            crossover_point = random.randint(1, len(parent1) - 1)
+            child1 = parent1[:crossover_point] + parent2[crossover_point:]
+            child2 = parent2[:crossover_point] + parent1[crossover_point:]
+            children.extend([child1, child2])
+        return children
+
+
+    def mutate(children):
+        # Perform mutation to introduce random changes in the children
+        for child in children:
+            for i in range(len(child)):
+                if random.random() < mutation_rate:
+                    child[i] = 1 - child[i]
+        return children
+
+    # Main genetic algorithm loop
+    num_features = X.shape[1]
+    population = initialize_population(num_features)
+    fitness_evolution = []  # List to store best fitness scores for each generation
+    num_selected_features_evolution = []  # List to store the number of selected features for each generation
+    performance_metrics = []  # List to store performance metrics for each generation
+    selected_features_evolution = []  # List to store the selected features for each generation
+    accuracy_evolution = []  # List to store the accuracy for each generation
+
+
+    for generation in range(num_generations):
+        fitness_scores = [fitness_function(individual) for individual in population]
+        print('fitness scores', fitness_scores)
+
+        # Select parents for crossover
+        parents = select_parents(population, fitness_scores)
+
+        # Perform crossover
+        children = crossover(parents)
+
+        # Perform mutation
+        children = mutate(children)
+
+        # Replace old population with the new population
+        population = children
+
+        # Store best fitness score and the number of selected features for the current generation
+        best_fitness_score = max(fitness_scores)
+        best_individual_indices = [i for i, score in enumerate(fitness_scores) if score == best_fitness_score]
+        fitness_evolution.append(best_fitness_score)
+        best_individual_idx = np.random.choice(best_individual_indices)
+        #num_selected_features = sum(population[best_individual_idx])
+
+        #num_selected_features = sum(population[np.argmax(fitness_scores)])
+        #num_selected_features_evolution.append(num_selected_features)
+
+    # Find the best individual (features) in the final population
+    final_fitness_scores = [fitness_function(individual) for individual in population]
+    best_individual_idx = np.argmax(final_fitness_scores)
+    best_individual_features = population[best_individual_idx]
+
+    # Select the best features from the dataset based on the best individual
+    selected_features = [i for i, include_feature in enumerate(best_individual_features) if include_feature == 1]
+    X_selected_features = X[:, selected_features]
+
+    # Plotting the fitness evolution
+    generations = range(1, num_generations + 1)
+    plt.plot(generations, fitness_evolution, marker='o')
+    plt.xlabel('Generation')
+    plt.ylabel('Best Fitness Score')
+    plt.title('Fitness Evolution Plot')
+    plt.grid(True)
+    plt.show()
+
+    # Plotting the feature selection evolution
+    #plt.plot(generations, num_selected_features_evolution, marker='o')
+    #plt.xlabel('Generation')
+    #plt.ylabel('Number of Selected Features')
+    #plt.title('Feature Selection Plot')
+    #plt.grid(True)
+    #plt.show()
+
+if __name__ == '__main__':
+    freeze_support()
+    main()
