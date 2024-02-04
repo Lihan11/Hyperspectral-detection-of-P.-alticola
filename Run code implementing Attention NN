@@ -1,0 +1,295 @@
+import torch
+import torch.nn as nn
+from torch.utils.data import DataLoader, Dataset
+from scipy import sparse
+from sklearn.metrics import accuracy_score
+import numpy as np
+from sklearn.datasets import load_iris
+import san
+import matplotlib.pyplot as plt
+import seaborn as sns
+from sklearn.feature_selection import mutual_info_classif  # chi2, f_classif
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.linear_model import LogisticRegression
+from sklearn.model_selection import cross_val_score
+import tqdm
+from sklearn.model_selection import KFold
+import pandas as pd
+import openpyxl
+from sklearn.preprocessing import StandardScaler
+from sklearn import preprocessing
+from sklearn.metrics import recall_score, f1_score
+from scipy.signal import savgol_filter
+from sklearn.preprocessing import QuantileTransformer
+from sklearn.model_selection import StratifiedKFold
+from sklearn.metrics import confusion_matrix
+from sklearn.model_selection import train_test_split
+
+
+def multiclass():
+    run_data = pd.read_excel\
+        (#Insert your file in here)
+
+    print(run_data)
+
+    # this code splits the data in x and y variables
+    list1 = run_data.columns.values
+    list1 = np.delete(list1, 0)
+    print(list1)
+
+    x = run_data.loc[:, list1].values
+    x2 = np.array(x)
+    print(x2)
+
+    # Assuming X is your feature matrix
+
+    # Initialize the rank-based normalizer
+    # rank_normalizer = QuantileTransformer(output_distribution='normal', random_state=42)
+
+    # Fit the normalizer to your data
+    # rank_normalizer.fit(x)
+
+    # Apply rank-based normalization to your data
+    # x_normalized = rank_normalizer.transform(x)
+
+    #Calculate the first derivative
+    #x2 = np.gradient(x, axis=1)
+
+    #x2 = preprocessing.normalize(x2)
+    #print(x2)
+
+    #dataset = pd.DataFrame(x2)
+
+    #dataset.to_excel(r"C:\Users\user-pc\Desktop\Raw reflectance normalized.xlsx")
+
+    #x2 = StandardScaler().fit_transform(x2)
+    #print("This is X", x)
+
+    # x = savgol_filter(x, 17, polyorder=2, deriv=2)
+
+    # The data array should be a 1D numpy array containing the spectral measurements
+
+
+    # The first_derivative array will have the same shape as the input data
+
+    y = run_data.loc[:, "Status"].values
+
+    print(y)
+
+    names = list1
+
+    clf = san.SAN(num_epochs=5, num_heads=16, batch_size=8, dropout=0.1, hidden_layer_size=32, stopping_crit=10,
+                  learning_rate=0.01)
+
+    #kf = KFold(n_splits=5)
+    accuracy_results = []
+    predictions_list = []  # Store predictions for all folds
+    train_accuracy_epochs = []  # Store training accuracy for each epoch
+    test_accuracy_epochs = []   # Store test accuracy for each epoch
+    """for train_index, test_index in kf.split(x):
+        train_x = x[train_index]
+        test_x = x[test_index]
+        train_y = y[train_index]
+        test_y = y[test_index]
+        x_sp = sparse.csr_matrix(train_x)
+        xt_sp = sparse.csr_matrix(test_x)"""
+    # Assuming 'x' and 'y' are your data
+    #kf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
+    kf = StratifiedKFold(n_splits=5, shuffle=True)
+    true_labels = []
+    mean_losses = []
+    fold_num = 1
+    all_global_attention_weights = []
+    all_local_attention_matrices = []
+
+    for train_index, test_index in kf.split(x2, y):
+        train_x, test_x = x2[train_index], x2[test_index]
+        train_y, test_y = y[train_index], y[test_index]
+        x_sp = sparse.csr_matrix(train_x)
+        xt_sp = sparse.csr_matrix(test_x)
+        clf.fit(x_sp, train_y)
+        train_predictions = clf.predict(x_sp)
+        test_predictions = clf.predict(xt_sp)
+        predictions = clf.predict(xt_sp)
+        true_labels.append(test_y)
+        score = accuracy_score(predictions, test_y)
+        print(score)
+        print(fold_num)
+        fold_num += 1
+        mean_losses.append(clf.mean_losses_per)
+        train_accuracy_epoch = accuracy_score(train_predictions, train_y)
+        test_accuracy_epoch = accuracy_score(test_predictions, test_y)
+        train_accuracy_epochs.append(train_accuracy_epoch)
+        test_accuracy_epochs.append(test_accuracy_epoch)
+        accuracy_results.append(score)
+        predictions_list.append(predictions)  # Store predictions for each fold
+
+
+        # uncomment to get importances
+        global_attention_weights = clf.get_mean_attention_weights()
+        local_attention_matrix = clf.get_instance_attention(x2)
+
+        all_global_attention_weights.append(global_attention_weights)
+        all_local_attention_matrices.append(local_attention_matrix)
+
+
+
+    # Calculate recall and F1 score for all folds combined
+    true_labels = np.concatenate(true_labels)
+    predicted_labels = np.concatenate(predictions_list)
+    cm = confusion_matrix(true_labels, predicted_labels)
+    recall = recall_score(true_labels, predicted_labels)
+    f1 = f1_score(true_labels, predicted_labels)
+    mean_losses = np.array(mean_losses)
+    ave = np.average(mean_losses, axis=0)
+    ave_global = np.average(all_global_attention_weights, axis=0)
+    ave_local = np.average(all_local_attention_matrices, axis=0)
+    print("this is the final list", ave)
+
+
+    print("Accuracy (Destructans dataset) {} ({})".format(np.mean(accuracy_results), np.std(accuracy_results)))
+    print("Recall: {:.4f}".format(recall))
+    print("F1 Score: {:.4f}".format(f1))
+    #print(global_attention_weights)
+    #print(local_attention_matrix)
+    #bb = pd.DataFrame(np.max(ave_local, axis=0))
+    #bp = pd.DataFrame(global_attention_weights)
+    #bb.to_excel(r"C:\Users\user-pc\Desktop\Tanay run 1 max local attention weights.xlsx")
+    #bp.to_excel(r"C:\Users\user-pc\Desktop\Tanay run 1 global attention weights.xlsx")
+    #model_path = r'C:\Users\user-pc\Desktop\model.pth'
+    #torch.save(clf.model.state_dict(), model_path)
+    #class_name = type(clf.model).__name__
+    #print(class_name)
+
+    plt.plot(names, ave_global, label="Global attention", marker="x")
+    plt.plot(names, np.mean(ave_local, axis=0), label="Local attention - mean", marker="x")
+    plt.plot(names, np.max(ave_local, axis=0), label="Local attention - max", marker="x")
+
+    plt.legend(loc=1)
+    plt.xticks(rotation=90)
+    plt.tight_layout()
+    plt.show()
+
+    # Plot the learning curve
+    ls = list(range(1, clf.num_epochs + 1))
+    plt.plot(ls, ave)
+    plt.xlabel("epoch")
+    plt.ylabel("Mean Loss")
+    plt.title("Learning curve for average loss per epoch over 5 folds")
+    plt.show()
+
+    # Plot the confusion matrix as a heatmap
+    plt.figure(figsize=(8, 6))
+    sns.heatmap(cm, annot=True, fmt='d', cmap='Blues')
+    plt.xlabel('Predicted Labels')
+    plt.ylabel('True Labels')
+    plt.title('Confusion Matrix')
+    plt.show()
+
+    unseen_data = pd.read_excel \
+        (####Insert your file here)
+
+    print(unseen_data)
+
+    # this code splits the data in x and y variables
+    list1 = unseen_data.columns.values
+    list1 = np.delete(list1, 0)
+    print(list1)
+
+    unseen_x = unseen_data.loc[:, list1].values
+    # x2 = np.array(x)
+    # unseen_x = preprocessing.normalize(new)
+
+
+    unseen_labels = unseen_data.loc[:, "Status"].values
+
+    print(unseen_labels)
+
+    predic = clf.predict(unseen_x)
+    scores = accuracy_score(predic, unseen_labels)
+    print("accuracy of retrained model on unseen data", scores)
+    print("predictions", predic)
+
+    #**************************************************************************
+
+    # Get the values above the threshold along with their indices using list comprehension
+    values_above_threshold = [x for i, x in enumerate(np.max(ave_local, axis=0)) if x > 0.002]
+    indices_above_threshold = [i for i, x in enumerate(np.max(ave_local, axis=0)) if x > 0.002]
+
+    print(values_above_threshold)
+    print(indices_above_threshold)
+    print(names[indices_above_threshold])
+
+    new_x = run_data.loc[:, names[indices_above_threshold]].values
+    new_x = np.array(new_x)
+    print(new_x)
+    #new_x2 = preprocessing.normalize(new_x)
+    new_x2 = new_x
+    print(new_x2)
+    new_data = pd.DataFrame(new_x2, y, columns=names[indices_above_threshold])
+    print(new_data)
+
+    mod = san.SAN(num_epochs=10, num_heads=32, batch_size=8, dropout=0.2, hidden_layer_size=32, stopping_crit=10,
+                  learning_rate=0.01)
+
+    train_data, test_data, train_labels, test_labels = train_test_split(new_x2, y, stratify=y, test_size=0.2, random_state=42)
+
+    train_data = sparse.csr_matrix(train_data)
+    test_data = sparse.csr_matrix(test_data)
+    mod.fit(train_data, train_labels)
+    predictions = mod.predict(test_data)
+    score = accuracy_score(predictions, test_labels)
+    print("accuracy of retrained model", score)
+    #true_labels = np.concatenate(test_labels)
+    #predictions = np.concatenate(predictions)
+    #recall = recall_score(true_labels, predictions)
+    #f1 = f1_score(true_labels, predictions)
+
+    #print("recall of retrained model", recall)
+    #print("f1 of retrained model", f1)
+
+    unseen_data = pd.read_excel\
+        (r"E:\Lihan Files\Work\PhD\2023\Hyperspectral data\17 November 2022 - Big mondi trial-20230414T054208Z-001\17 November 2022 - Big mondi trial\23 November\Combined file\Excel\2nd Derivitive\Copy of 23 Nov Combined 2nd.xlsx", sheet_name="Test (3)", engine='openpyxl')
+
+    print(unseen_data)
+
+    # this code splits the data in x and y variables
+    list1 = unseen_data.columns.values
+    list1 = np.delete(list1, 0)
+    print(list1)
+
+    new = unseen_data.loc[:, names[indices_above_threshold]].values
+    new = np.array(new)
+
+    #x = unseen_data.loc[:, list1].values
+    #x2 = np.array(x)
+    #unseen_x = preprocessing.normalize(new)
+    unseen_x = new
+    print(unseen_x)
+
+    unseen_labels = unseen_data.loc[:, "Status"].values
+
+    print(unseen_labels)
+
+    predic = mod.predict(unseen_x)
+    scores = accuracy_score(predic, unseen_labels)
+    print("accuracy of retrained model on unseen data", scores)
+    print("predictions", predic)
+
+
+
+
+
+
+
+
+    #return predictions
+
+
+
+
+
+
+if __name__ == '__main__':
+    multiclass()
+
