@@ -67,7 +67,7 @@ for epoch in range(epochs):
     max_features= [500, 1000, 1500]
     param_grid = dict(n_estimators=n_estimators, max_features=max_features)
      ## Define the n-folds for hyper-parameter optimization on training set.
-    cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=200889)
+    cv = RepeatedStratifiedKFold(n_splits=5, n_repeats=10, random_state=200514)
     #use out-of-bag samples ("oob_score= True") to estimate the generalization accuracy.
     model = RandomForestClassifier(bootstrap= True)
     #let's use cv=10 in the GridSearchCV call
