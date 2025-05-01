@@ -26,11 +26,11 @@ os.environ["KERAS_BACKEND"] = "plaidml.keras.backend"
 ## Read in the data
 
 # Load dataset
-df = pd.read_excel(r"C:\Users\user-pc\Desktop\use this.xlsx")
+df = pd.read_excel(r"Your file name here.xlsx")
 
 # Split dataset into training and testing sets
-x = df.drop('Status', axis=1)
-y = df['Status']
+x = df.drop('Target column', axis=1) #In an excel sheet where the first column is the target column in the table this piece of code will also drop that first column and leave only the training data 
+y = df['Target column']
 
 
 ## Generate empty lists to fill with AUC values for test-set
@@ -142,4 +142,4 @@ plt.ylabel('True Positive Rate')
 plt.title('Random Forest ROC\n')
 plt.legend(loc="lower right", fontsize=8)
 plt.show()
-RF_plot.savefig('results/figures/Random_Forest_baxter.png', dpi=1000)
+RF_plot.savefig('results/figures/Random_Forest.png', dpi=1000)
